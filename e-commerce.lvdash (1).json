@@ -1,0 +1,564 @@
+{
+  "datasets": [
+    {
+      "name": "2938ca3f",
+      "displayName": "Retentionsrate nach Kohorte",
+      "queryLines": [
+        "-- Retentionsrate nach Kohorte (1, 2, 3 months)\n",
+        "WITH customer_orders_with_min AS (\n",
+        "    SELECT\n",
+        "        customer_id,\n",
+        "        order_date,\n",
+        "        MIN(order_date) OVER (PARTITION BY customer_id) AS first_purchase_date\n",
+        "    FROM `cohort_analysis_bigquery_catalog`.`cohort_db`.`ecom_orders`\n",
+        "),\n",
+        "customer_orders AS (\n",
+        "    SELECT\n",
+        "        customer_id,\n",
+        "        first_purchase_date,\n",
+        "        MIN(CASE\n",
+        "            WHEN order_date > first_purchase_date THEN order_date\n",
+        "            ELSE NULL\n",
+        "        END) AS second_purchase_date\n",
+        "    FROM customer_orders_with_min\n",
+        "    GROUP BY customer_id, first_purchase_date\n",
+        "),\n",
+        "cohort_retention AS (\n",
+        "    SELECT\n",
+        "        customer_id,\n",
+        "        DATE_TRUNC('month', first_purchase_date) AS cohort_month,\n",
+        "        first_purchase_date,\n",
+        "        second_purchase_date,\n",
+        "        --Berechnen, ob der Kunde innerhalb des Zeitrahmens zurückgekehrt ist\n",
+        "        CASE\n",
+        "            WHEN second_purchase_date IS NOT NULL\n",
+        "            AND DATEDIFF(second_purchase_date, first_purchase_date) <= 30\n",
+        "            THEN 1 ELSE 0\n",
+        "        END AS returned_1month,\n",
+        "        CASE\n",
+        "            WHEN second_purchase_date IS NOT NULL\n",
+        "            AND DATEDIFF(second_purchase_date, first_purchase_date) <= 60\n",
+        "            THEN 1 ELSE 0\n",
+        "        END AS returned_2month,\n",
+        "        CASE\n",
+        "            WHEN second_purchase_date IS NOT NULL\n",
+        "            AND DATEDIFF(second_purchase_date, first_purchase_date) <= 90\n",
+        "            THEN 1 ELSE 0\n",
+        "        END AS returned_3month\n",
+        "    FROM customer_orders\n",
+        ")\n",
+        "SELECT\n",
+        "    cohort_month,\n",
+        "    COUNT(*) AS total_customers,\n",
+        "    ROUND(SUM(returned_1month) * 100.0 / COUNT(*), 2) AS retention_rate_1month,\n",
+        "    ROUND(SUM(returned_2month) * 100.0 / COUNT(*), 2) AS retention_rate_2month,\n",
+        "    ROUND(SUM(returned_3month) * 100.0 / COUNT(*), 2) AS retention_rate_3month\n",
+        "FROM cohort_retention\n",
+        "GROUP BY cohort_month\n",
+        "ORDER BY cohort_month;"
+      ],
+      "catalog": "cohort_analysis_bigquery_catalog",
+      "schema": "cohort_db"
+    },
+    {
+      "name": "5324c1d0",
+      "displayName": "Wiederkaufsraten nach Kohorte (2, 3, 4 Bestellung)",
+      "queryLines": [
+        "-- Wiederkaufsraten nach Kohorte (2, 3, 4 Bestellung)\n",
+        "WITH customer_order_counts AS (\n",
+        "    SELECT\n",
+        "        customer_id,\n",
+        "        MIN(order_date) AS first_order_date,\n",
+        "        COUNT(*) AS total_orders\n",
+        "    FROM `cohort_analysis_bigquery_catalog`.`cohort_db`.`ecom_orders`\n",
+        "    GROUP BY customer_id\n",
+        "),\n",
+        "cohort_repeated AS (\n",
+        "    SELECT\n",
+        "        customer_id,\n",
+        "        DATE_TRUNC('month', first_order_date) AS cohort_month,\n",
+        "        total_orders,\n",
+        "        -- Flaggen für Nachbestellungen\n",
+        "        CASE WHEN total_orders >= 2 THEN 1 ELSE 0 END AS repeated_2nd_order,\n",
+        "        CASE WHEN total_orders >= 3 THEN 1 ELSE 0 END AS repeated_3rd_order,\n",
+        "        CASE WHEN total_orders >= 4 THEN 1 ELSE 0 END AS repeated_4th_order\n",
+        "    FROM customer_order_counts\n",
+        ")\n",
+        "SELECT\n",
+        "    cohort_month,\n",
+        "    COUNT(*) AS total_customers,\n",
+        "    ROUND(SUM(repeated_2nd_order) * 100.0 / COUNT(*), 2) AS repeat_rate_2nd_order,\n",
+        "    ROUND(SUM(repeated_3rd_order) * 100.0 / COUNT(*), 2) AS repeat_rate_3rd_order,\n",
+        "    ROUND(SUM(repeated_4th_order) * 100.0 / COUNT(*), 2) AS repeat_rate_4th_order\n",
+        "FROM cohort_repeated\n",
+        "GROUP BY cohort_month\n",
+        "ORDER BY cohort_month;"
+      ]
+    },
+    {
+      "name": "b586fa39",
+      "displayName": "Kohortengröße nach Monat",
+      "queryLines": [
+        "-- Kohortengröße nach Monat\n",
+        "WITH first_purchase AS (\n",
+        "  SELECT\n",
+        "      customer_id,\n",
+        "      MIN(order_date) AS first_purchase_date \n",
+        "  FROM `cohort_analysis_bigquery_catalog`.`cohort_db`.`ecom_orders`\n",
+        "  GROUP BY customer_id\n",
+        ")\n",
+        "SELECT\n",
+        "    DATE_TRUNC('month', first_purchase_date) AS cohort_month,\n",
+        "    COUNT(*) AS new_customers\n",
+        "FROM first_purchase\n",
+        "GROUP BY DATE_TRUNc('month', first_purchase_date)\n",
+        "ORDER BY cohort_month;"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "E-comerce",
+      "displayName": "Retentionsrate nach Kohorte",
+      "layout": [
+        {
+          "widget": {
+            "name": "5e5a9bae",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2938ca3f",
+                  "fields": [
+                    {
+                      "name": "cohort_month",
+                      "expression": "`cohort_month`"
+                    },
+                    {
+                      "name": "sum(retention_rate_1month)",
+                      "expression": "SUM(`retention_rate_1month`)"
+                    },
+                    {
+                      "name": "sum(retention_rate_2month)",
+                      "expression": "SUM(`retention_rate_2month`)"
+                    },
+                    {
+                      "name": "sum(retention_rate_3month)",
+                      "expression": "SUM(`retention_rate_3month`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Retentionsrate nach Kohorte",
+                "showTitle": true,
+                "headerAlignment": "center"
+              },
+              "mark": {
+                "colors": [
+                  "#077A9D",
+                  "#00A972",
+                  "#FFAB00"
+                ],
+                "layout": "percent-stack"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "cohort_month",
+                  "axis": {
+                    "title": "Cohorte Month"
+                  },
+                  "displayName": "Cohorte Month",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fields": [
+                    {
+                      "fieldName": "sum(retention_rate_1month)",
+                      "displayName": "1 Month"
+                    },
+                    {
+                      "fieldName": "sum(retention_rate_2month)",
+                      "displayName": "2 Months"
+                    },
+                    {
+                      "fieldName": "sum(retention_rate_3month)",
+                      "displayName": "3 Months"
+                    }
+                  ],
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 0,
+                      "max": 1
+                    }
+                  },
+                  "axis": {
+                    "title": "Retention Rate "
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "49042353",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "5324c1d0",
+                  "fields": [
+                    {
+                      "name": "cohort_month",
+                      "expression": "`cohort_month`"
+                    },
+                    {
+                      "name": "avg(repeat_rate_2nd_order)",
+                      "expression": "AVG(`repeat_rate_2nd_order`)"
+                    },
+                    {
+                      "name": "avg(repeat_rate_3rd_order)",
+                      "expression": "AVG(`repeat_rate_3rd_order`)"
+                    },
+                    {
+                      "name": "avg(repeat_rate_4th_order)",
+                      "expression": "AVG(`repeat_rate_4th_order`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "cohort_month",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "axis": {
+                    "title": "Cohort_month"
+                  },
+                  "displayName": "Cohort_month"
+                },
+                "y": {
+                  "fields": [
+                    {
+                      "fieldName": "avg(repeat_rate_2nd_order)",
+                      "displayName": "2nd Order"
+                    },
+                    {
+                      "fieldName": "avg(repeat_rate_3rd_order)",
+                      "displayName": "3rd Order"
+                    },
+                    {
+                      "fieldName": "avg(repeat_rate_4th_order)",
+                      "displayName": "4th Order"
+                    }
+                  ],
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Order"
+                  }
+                }
+              },
+              "frame": {
+                "title": "Wiederholungskaufrate",
+                "showTitle": true,
+                "showDescription": false,
+                "headerAlignment": "center"
+              },
+              "mark": {
+                "colors": [
+                  "#FFAB00",
+                  "#00A972",
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "72a488d4",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "b586fa39",
+                  "fields": [
+                    {
+                      "name": "cohort_month",
+                      "expression": "`cohort_month`"
+                    },
+                    {
+                      "name": "sum(new_customers)",
+                      "expression": "SUM(`new_customers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "cohort_month",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "axis": {
+                    "title": "Cohort_month"
+                  },
+                  "displayName": "Cohort_month"
+                },
+                "y": {
+                  "fieldName": "sum(new_customers)",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 0,
+                      "max": 100
+                    }
+                  },
+                  "axis": {
+                    "title": "New_customers"
+                  },
+                  "displayName": "total_customers"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "title": "Kohortengröße nach Monat",
+                "showTitle": true,
+                "headerAlignment": "center"
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 2
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ],
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "31678c84",
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Zeitraum",
+                "showDescription": false
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": []
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "8bb3a93a",
+            "queries": [
+              {
+                "name": "dashboards/01f0a57992e316aca72e2760a7cb5632/datasets/01f0a57992e31ab9b5127c6f0f390990_retention_rate_1month",
+                "query": {
+                  "datasetName": "2938ca3f",
+                  "fields": [
+                    {
+                      "name": "retention_rate_1month",
+                      "expression": "`retention_rate_1month`"
+                    },
+                    {
+                      "name": "retention_rate_1month_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "retention_rate_1month",
+                    "queryName": "dashboards/01f0a57992e316aca72e2760a7cb5632/datasets/01f0a57992e31ab9b5127c6f0f390990_retention_rate_1month"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Metriken"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "5478f7c6",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 24px;\">Kohortengröße nach Monat</span></span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#FAFAFB",
+        "dark": "#1F272D"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "fontColor": {
+        "light": "#11171C",
+        "dark": "#E8ECF0"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "widgetHeaderAlignment": "LEFT"
+    },
+    "applyModeEnabled": false
+  }
+}
