@@ -24,7 +24,7 @@ The pipeline follows professional data engineering standards:
 
 ---
 
-## ## 📊 Visualizations & Data Insights
+## 📊 Visualizations & Data Insights
 
 The analysis produces business-critical KPIs visualized in the dashboard below:
 
