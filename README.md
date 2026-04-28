@@ -100,8 +100,8 @@ ecommerce-cohort-analysis/
 │   └── repeat_purchase_rate.png     # Loyalty depth metrics
 ├── cohort_analysis.ipynb            # Main pipeline & local analysis
 ├── e-commerce.lvdash.json           # Databricks SQL Dashboard definition
-├── requirements.txt                 # Python dependencies
-└── README.md                        # Project documentation
+├── requirements.txt                
+└── README.md                      
 ```
 
 ---
